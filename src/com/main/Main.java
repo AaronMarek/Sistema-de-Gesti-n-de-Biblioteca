@@ -1,227 +1,322 @@
 package com.main;
 
+import com.dao.LibroDAO;
+import com.dao.MiembroDAO;
+import com.dao.UsuarioDAO;
 import com.database.DatabaseConnection;
-import com.model.*;
-import com.dao.*;
+import com.model.Libro;
+import com.model.Miembro;
+import com.model.Usuario;
+
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Scanner;
 
-
+/**
+ * Interfaz de consola principal de la aplicación.
+ * Diseñada para trabajar con los DAOs existentes (UsuarioDAO, LibroDAO, MiembroDAO).
+ */
 public class Main {
+
     private static final Scanner scanner = new Scanner(System.in);
-    private static UsuarioDAO usuarioDAO;
-    private static Usuario usuarioActual;
+
+    // DAOs (instanciados una vez para reusar)
+    private static final UsuarioDAO usuarioDAO = new UsuarioDAO();
+    private static final LibroDAO libroDAO = new LibroDAO();
+    private static final MiembroDAO miembroDAO = new MiembroDAO();
+
+    private static Usuario usuarioLogueado = null;
 
     public static void main(String[] args) {
-        System.out.println("╔════════════════════════════════════════════════╗");
-        System.out.println("║   SISTEMA DE GESTIÓN (USUARIOS) v1.0          ║");
-        System.out.println("╚════════════════════════════════════════════════╝");
-
+        System.out.println("==== Sistema de Gestión de Biblioteca ====");
+        
+        // Intento simple de probar conexión al iniciar
         try {
-            usuarioDAO = new UsuarioDAO();
-
-            if (autenticarUsuario()) {
-                mostrarMenuPrincipal();
-            } else {
-                System.out.println("Autenticación fallida. Saliendo del sistema...");
-            }
-
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-            e.printStackTrace();
-        } finally {
-            DatabaseConnection.desconectar();
-            scanner.close();
-        }
-    }
-
-    private static boolean autenticarUsuario() {
-        System.out.println("\n--- AUTENTICACIÓN DE USUARIO ---");
-        System.out.print("Usuario: ");
-        String username = scanner.nextLine().trim();
-        System.out.print("Contraseña: ");
-        String password = scanner.nextLine().trim();
-
-        try {
-            usuarioActual = usuarioDAO.autenticar(username, password);
-            if (usuarioActual != null) {
-                System.out.println("\n✓ Bienvenido, " + usuarioActual.getNombreCompleto());
-                System.out.println("  Rol: " + usuarioActual.getRol());
-                return true;
-            } else {
-                System.out.println("\n✗ Usuario o contraseña incorrectos");
-                return false;
-            }
+            DatabaseConnection.conectar().close();
+            System.out.println("Base de datos: conexión OK");
         } catch (SQLException e) {
-            System.out.println("Error de autenticación: " + e.getMessage());
-            return false;
+            System.err.println("No se pudo conectar a la base de datos: " + e.getMessage());
         }
+
+        boolean salir = false;
+        while (!salir) {
+            mostrarMenuPrincipal();
+            String opcion = scanner.nextLine().trim();
+            switch (opcion) {
+                case "1":
+                    opcionLogin();
+                    break;
+                case "2":
+                    listarLibros();
+                    break;
+                case "3":
+                    verLibroPorId();
+                    break;
+                case "4":
+                    listarMiembros();
+                    break;
+                case "5":
+                    crearMiembro();
+                    break;
+                case "6":
+                    buscarLibroPorTitulo();
+                    break;
+                case "7":
+                    actualizarMiembro();
+                    break;
+                case "0":
+                    salir = true;
+                    break;
+                default:
+                    System.out.println("Opción no válida. Intenta de nuevo.");
+            }
+        }
+
+        System.out.println("Aplicación finalizada. ¡Hasta luego!");
     }
 
     private static void mostrarMenuPrincipal() {
-        boolean continuar = true;
-
-        while (continuar) {
-            System.out.println("\n╔════════════════════════════════════════╗");
-            System.out.println("║            MENÚ PRINCIPAL              ║");
-            System.out.println("╠════════════════════════════════════════╣");
-            System.out.println("║ 1. Listar usuarios                     ║");
-            System.out.println("║ 2. Crear usuario                       ║");
-            System.out.println("║ 3. Editar usuario (por ID)             ║");
-            System.out.println("║ 4. Eliminar usuario (por ID)           ║");
-            System.out.println("║ 0. Salir                               ║");
-            System.out.println("╚════════════════════════════════════════╝");
-            System.out.print("Seleccione una opción: ");
-
-            int opcion = leerEntero();
-
-            switch (opcion) {
-                case 1 -> listarUsuarios();
-                case 2 -> crearUsuario();
-                case 3 -> editarUsuario();
-                case 4 -> eliminarUsuario();
-                case 0 -> {
-                    System.out.println("\n¡Hasta pronto!");
-                    continuar = false;
-                }
-                default -> System.out.println("Opción inválida");
-            }
+        System.out.println();
+        System.out.println("=== Menú Principal ===");
+        if (usuarioLogueado != null) {
+            System.out.println("Usuario: " + usuarioLogueado.getNombreCompleto() + " (" + usuarioLogueado.getRol() + ")");
         }
+        System.out.println("1) Iniciar sesión");
+        System.out.println("2) Listar libros");
+        System.out.println("3) Ver libro por ID");
+        System.out.println("4) Listar miembros");
+        System.out.println("5) Crear miembro");
+        System.out.println("6) Buscar libro por título");
+        System.out.println("7) Actualizar miembro");
+        System.out.println("0) Salir");
+        System.out.print("Elige una opción: ");
     }
 
-    private static void listarUsuarios() {
+    private static void opcionLogin() {
+        System.out.print("Usuario: ");
+        String user = scanner.nextLine().trim();
+        System.out.print("Contraseña: ");
+        String pass = scanner.nextLine().trim();
+
         try {
-            List<Usuario> usuarios = usuarioDAO.obtenerTodos();
-            System.out.println("\n=== USUARIOS DEL SISTEMA ===");
-            for (Usuario u : usuarios) {
-                System.out.println(u);
+            Usuario u = usuarioDAO.autenticar(user, pass);
+            if (u != null) {
+                usuarioLogueado = u;
+                System.out.println("✓ Login correcto. Bienvenido " + u.getNombreCompleto() + " (" + u.getRol() + ")");
+            } else {
+                System.out.println("✗ Usuario o contraseña incorrectos.");
             }
         } catch (SQLException e) {
-            System.out.println("Error al listar usuarios: " + e.getMessage());
+            System.err.println("Error comprobando credenciales: " + e.getMessage());
         }
     }
 
-    private static void crearUsuario() {
+    private static void listarLibros() {
         try {
-            System.out.println("\n--- CREAR NUEVO USUARIO ---");
-            System.out.print("Username: ");
-            String username = scanner.nextLine().trim();
+            List<Libro> libros = libroDAO.obtenerTodos();
+            if (libros == null || libros.isEmpty()) {
+                System.out.println("No hay libros registrados.");
+                return;
+            }
+            System.out.println("\n=== Lista de Libros ===");
+            System.out.println(String.format("%-5s %-40s %-25s %-15s %-12s", 
+                "ID", "Título", "Autor", "Editorial", "Disponibles"));
+            System.out.println("─".repeat(100));
+            
+            for (Libro l : libros) {
+                System.out.printf("%-5d %-40s %-25s %-15s %d/%d%n",
+                    l.getIdLibro(), 
+                    truncar(l.getTitulo(), 38), 
+                    truncar(l.getNombreAutor(), 23),
+                    truncar(l.getEditorial(), 13),
+                    l.getCantidadDisponible(),
+                    l.getCantidadTotal());
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al listar libros: " + e.getMessage());
+        }
+    }
 
-            System.out.print("Password: ");
-            String password = scanner.nextLine().trim();
+    private static void verLibroPorId() {
+        try {
+            System.out.print("ID del libro: ");
+            int id = Integer.parseInt(scanner.nextLine().trim());
+            Libro libro = libroDAO.obtenerPorId(id);
+            
+            if (libro == null) {
+                System.out.println("✗ Libro no encontrado con ID " + id);
+                return;
+            }
+            
+            System.out.println("\n=== Detalle del Libro ===");
+            System.out.println("ID:              " + libro.getIdLibro());
+            System.out.println("ISBN:            " + libro.getIsbn());
+            System.out.println("Título:          " + libro.getTitulo());
+            System.out.println("Autor:           " + libro.getNombreAutor());
+            System.out.println("Categoría:       " + libro.getNombreCategoria());
+            System.out.println("Editorial:       " + libro.getEditorial());
+            System.out.println("Año:             " + libro.getAnioPublicacion());
+            System.out.println("Páginas:         " + libro.getNumeroPaginas());
+            System.out.println("Idioma:          " + libro.getIdioma());
+            System.out.println("Total:           " + libro.getCantidadTotal());
+            System.out.println("Disponibles:     " + libro.getCantidadDisponible());
+            System.out.println("Ubicación:       " + libro.getUbicacion());
+            System.out.println("Estado:          " + libro.getEstado());
+            
+        } catch (NumberFormatException nfe) {
+            System.out.println("✗ ID inválido. Debe ser un número.");
+        } catch (SQLException e) {
+            System.err.println("Error al obtener libro: " + e.getMessage());
+        }
+    }
 
-            System.out.print("Nombre completo: ");
+    private static void listarMiembros() {
+        try {
+            List<Miembro> miembros = miembroDAO.obtenerTodos();
+            if (miembros == null || miembros.isEmpty()) {
+                System.out.println("No hay miembros registrados.");
+                return;
+            }
+            
+            System.out.println("\n=== Lista de Miembros ===");
+            System.out.println(String.format("%-5s %-30s %-15s %-30s %-15s", 
+                "ID", "Nombre Completo", "DNI", "Email", "Estado"));
+            System.out.println("─".repeat(100));
+            
+            for (Miembro m : miembros) {
+                String nombreCompleto = m.getNombre() + " " + m.getApellido();
+                System.out.printf("%-5d %-30s %-15s %-30s %-15s%n",
+                    m.getIdMiembro(), 
+                    truncar(nombreCompleto, 28),
+                    m.getDni(),
+                    truncar(m.getEmail(), 28),
+                    m.getEstado());
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al listar miembros: " + e.getMessage());
+        }
+    }
+
+    private static void crearMiembro() {
+        try {
+            System.out.println("\n=== Crear Nuevo Miembro ===");
+            
+            System.out.print("Nombre: ");
             String nombre = scanner.nextLine().trim();
-
+            
+            System.out.print("Apellido: ");
+            String apellido = scanner.nextLine().trim();
+            
+            System.out.print("DNI: ");
+            String dni = scanner.nextLine().trim();
+            
+            System.out.print("Teléfono: ");
+            String telefono = scanner.nextLine().trim();
+            
             System.out.print("Email: ");
             String email = scanner.nextLine().trim();
-
-            System.out.print("Rol (ADMIN/BIBLIOTECARIO/LECTOR): ");
-            String rolStr = scanner.nextLine().trim().toUpperCase();
-            Usuario.Rol rol;
-            try {
-                rol = Usuario.Rol.valueOf(rolStr);
-            } catch (IllegalArgumentException ex) {
-                System.out.println("Rol inválido. Usando LECTOR por defecto.");
-                rol = Usuario.Rol.LECTOR;
-            }
-
-            Usuario usuario = new Usuario(username, password, nombre, email, rol);
-
-            if (usuarioDAO.crear(usuario)) {
-                System.out.println("✓ Usuario creado exitosamente con ID: " + usuario.getIdUsuario());
+            
+            System.out.print("Dirección: ");
+            String direccion = scanner.nextLine().trim();
+            
+            // Crear objeto Miembro con todos los campos requeridos
+            Miembro m = new Miembro();
+            m.setNombre(nombre);
+            m.setApellido(apellido);
+            m.setDni(dni);
+            m.setTelefono(telefono);
+            m.setEmail(email);
+            m.setDireccion(direccion);
+            m.setFechaInscripcion(LocalDate.now());
+            m.setEstado(Miembro.EstadoMiembro.ACTIVO);
+            m.setMultaAcumulada(0.0);
+            
+            boolean ok = miembroDAO.crear(m);
+            if (ok) {
+                System.out.println("✓ Miembro creado correctamente con ID: " + m.getIdMiembro());
             } else {
-                System.out.println("✗ Error al crear usuario");
+                System.out.println("✗ No se pudo crear el miembro.");
             }
         } catch (SQLException e) {
-            System.out.println("Error al crear usuario: " + e.getMessage());
+            System.err.println("Error al crear miembro: " + e.getMessage());
         }
     }
 
-    private static void editarUsuario() {
+    private static void buscarLibroPorTitulo() {
         try {
-            System.out.print("ID del usuario a editar: ");
-            int id = leerEntero();
-            Usuario usuario = usuarioDAO.obtenerPorId(id);
-            if (usuario == null) {
-                System.out.println("Usuario no encontrado");
+            System.out.print("Ingrese título a buscar: ");
+            String titulo = scanner.nextLine().trim();
+            
+            List<Libro> libros = libroDAO.buscarPorTitulo(titulo);
+            
+            if (libros == null || libros.isEmpty()) {
+                System.out.println("No se encontraron libros con ese título.");
                 return;
             }
+            
+            System.out.println("\n=== Resultados de Búsqueda ===");
+            System.out.println(String.format("%-5s %-40s %-25s %-12s", 
+                "ID", "Título", "Autor", "Disponibles"));
+            System.out.println("─".repeat(85));
+            
+            for (Libro l : libros) {
+                System.out.printf("%-5d %-40s %-25s %d/%d%n",
+                    l.getIdLibro(), 
+                    truncar(l.getTitulo(), 38),
+                    truncar(l.getNombreAutor(), 23),
+                    l.getCantidadDisponible(),
+                    l.getCantidadTotal());
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al buscar libros: " + e.getMessage());
+        }
+    }
 
-            System.out.println("Usuario actual: " + usuario);
-            System.out.print("Nuevo username (Enter para mantener): ");
-            String username = scanner.nextLine().trim();
-            if (!username.isEmpty()) usuario.setUsername(username);
-
-            System.out.print("Nueva password (Enter para mantener): ");
-            String password = scanner.nextLine().trim();
-            if (!password.isEmpty()) usuario.setPassword(password);
-
-            System.out.print("Nuevo nombre completo (Enter para mantener): ");
+    private static void actualizarMiembro() {
+        try {
+            System.out.print("ID del miembro a actualizar: ");
+            int id = Integer.parseInt(scanner.nextLine().trim());
+            
+            Miembro m = miembroDAO.obtenerPorId(id);
+            if (m == null) {
+                System.out.println("✗ Miembro no encontrado con ID " + id);
+                return;
+            }
+            
+            System.out.println("\n=== Actualizar Miembro ===");
+            System.out.println("Nombre actual: " + m.getNombre());
+            System.out.print("Nuevo nombre (Enter para mantener): ");
             String nombre = scanner.nextLine().trim();
-            if (!nombre.isEmpty()) usuario.setNombreCompleto(nombre);
-
+            if (!nombre.isEmpty()) {
+                m.setNombre(nombre);
+            }
+            
+            System.out.println("Email actual: " + m.getEmail());
             System.out.print("Nuevo email (Enter para mantener): ");
             String email = scanner.nextLine().trim();
-            if (!email.isEmpty()) usuario.setEmail(email);
-
-            System.out.print("Rol (ADMIN/BIBLIOTECARIO/LECTOR) (Enter para mantener): ");
-            String rolStr = scanner.nextLine().trim();
-            if (!rolStr.isEmpty()) {
-                try {
-                    usuario.setRol(Usuario.Rol.valueOf(rolStr.toUpperCase()));
-                } catch (IllegalArgumentException ex) {
-                    System.out.println("Rol inválido. Se mantiene el rol actual.");
-                }
+            if (!email.isEmpty()) {
+                m.setEmail(email);
             }
-
-            System.out.print("Activo? (true/false) (Enter para mantener): ");
-            String activoStr = scanner.nextLine().trim();
-            if (!activoStr.isEmpty()) {
-                usuario.setActivo(Boolean.parseBoolean(activoStr));
-            }
-
-            if (usuarioDAO.actualizar(usuario)) {
-                System.out.println("✓ Usuario actualizado");
+            
+            boolean ok = miembroDAO.actualizar(m);
+            if (ok) {
+                System.out.println("✓ Miembro actualizado correctamente.");
             } else {
-                System.out.println("✗ Error al actualizar usuario");
+                System.out.println("✗ No se pudo actualizar el miembro.");
             }
-
+            
+        } catch (NumberFormatException nfe) {
+            System.out.println("✗ ID inválido. Debe ser un número.");
         } catch (SQLException e) {
-            System.out.println("Error al editar usuario: " + e.getMessage());
+            System.err.println("Error al actualizar miembro: " + e.getMessage());
         }
     }
 
-    private static void eliminarUsuario() {
-        try {
-            System.out.print("ID del usuario a eliminar: ");
-            int id = leerEntero();
-            System.out.print("¿Seguro que desea eliminar el usuario " + id + " ? (s/n): ");
-            String confirm = scanner.nextLine().trim().toLowerCase();
-            if (!confirm.equals("s") && !confirm.equals("si")) {
-                System.out.println("Eliminación cancelada.");
-                return;
-            }
-
-            if (usuarioDAO.eliminar(id)) {
-                System.out.println("✓ Usuario eliminado");
-            } else {
-                System.out.println("✗ No se pudo eliminar el usuario (¿existía?).");
-            }
-        } catch (SQLException e) {
-            System.out.println("Error al eliminar usuario: " + e.getMessage());
-        }
-    }
-
-    private static int leerEntero() {
-        while (true) {
-            String linea = scanner.nextLine().trim();
-            try {
-                return Integer.parseInt(linea);
-            } catch (NumberFormatException e) {
-                System.out.print("Por favor ingrese un número válido: ");
-            }
-        }
+    // Método auxiliar para truncar texto
+    private static String truncar(String texto, int longitud) {
+        if (texto == null) return "";
+        if (texto.length() <= longitud) return texto;
+        return texto.substring(0, longitud - 2) + "..";
     }
 }

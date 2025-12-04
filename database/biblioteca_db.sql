@@ -101,3 +101,53 @@ CREATE TABLE reservas (
     FOREIGN KEY (id_libro) REFERENCES libros(id_libro) ON DELETE CASCADE,
     FOREIGN KEY (id_miembro) REFERENCES miembros(id_miembro) ON DELETE CASCADE
 );
+
+-- Índices para mejorar el rendimiento
+CREATE INDEX idx_libros_titulo ON libros(titulo);
+CREATE INDEX idx_libros_isbn ON libros(isbn);
+CREATE INDEX idx_prestamos_estado ON prestamos(estado);
+CREATE INDEX idx_miembros_dni ON miembros(dni);
+
+-- Vista para reportes de préstamos
+CREATE VIEW vista_prestamos_completa AS
+SELECT 
+    p.id_prestamo,
+    l.titulo AS libro,
+    l.isbn,
+    CONCAT(m.nombre, ' ', m.apellido) AS miembro,
+    m.dni,
+    CONCAT(u.nombre_completo) AS bibliotecario,
+    p.fecha_prestamo,
+    p.fecha_devolucion_esperada,
+    p.fecha_devolucion_real,
+    p.estado,
+    DATEDIFF(IFNULL(p.fecha_devolucion_real, CURDATE()), p.fecha_devolucion_esperada) AS dias_atraso
+FROM prestamos p
+JOIN libros l ON p.id_libro = l.id_libro
+JOIN miembros m ON p.id_miembro = m.id_miembro
+JOIN usuarios u ON p.id_usuario = u.id_usuario;
+
+-- Trigger para actualizar disponibilidad al crear préstamo
+DELIMITER //
+CREATE TRIGGER after_prestamo_insert
+AFTER INSERT ON prestamos
+FOR EACH ROW
+BEGIN
+    UPDATE libros 
+    SET cantidad_disponible = cantidad_disponible - 1 
+    WHERE id_libro = NEW.id_libro;
+END//
+
+-- Trigger para actualizar disponibilidad al devolver libro
+CREATE TRIGGER after_prestamo_devolucion
+AFTER UPDATE ON prestamos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'DEVUELTO' AND OLD.estado != 'DEVUELTO' THEN
+        UPDATE libros 
+        SET cantidad_disponible = cantidad_disponible + 1 
+        WHERE id_libro = NEW.id_libro;
+    END IF;
+END//
+
+DELIMITER ;
