@@ -31,6 +31,7 @@ public class Prestamo {
 		this.estado = EstadoPrestamo.ACTIVO;
 	}
 
+	// Getters y Setters
 	public int getIdPrestamo() {
 		return idPrestamo;
 	}
@@ -119,14 +120,21 @@ public class Prestamo {
 		this.observaciones = observaciones;
 	}
 
+	public boolean estaAtrasado() {
+		if (estado == EstadoPrestamo.DEVUELTO)
+			return false;
+		return LocalDate.now().isAfter(fechaDevolucionEsperada);
+	}
+
+	public int getDiasAtraso() {
+		if (!estaAtrasado())
+			return 0;
+		return (int) java.time.temporal.ChronoUnit.DAYS.between(fechaDevolucionEsperada, LocalDate.now());
+	}
+
 	@Override
 	public String toString() {
-		return "Prestamo [idPrestamo=" + idPrestamo + ", idLibro=" + idLibro + ", tituloLibro=" + tituloLibro
-				+ ", idMiembro=" + idMiembro + ", nombreMiembro=" + nombreMiembro + ", idUsuario=" + idUsuario
-				+ ", fechaPrestamo=" + fechaPrestamo + ", fechaDevolucionEsperada=" + fechaDevolucionEsperada
-				+ ", fechaDevolucionReal=" + fechaDevolucionReal + ", estado=" + estado + ", observaciones="
-				+ observaciones + "]";
-	}	
-	
-	
+		return "Prestamo{" + "libro='" + tituloLibro + '\'' + ", miembro='" + nombreMiembro + '\'' + ", estado="
+				+ estado + ", fechaDevolucion=" + fechaDevolucionEsperada + '}';
+	}
 }

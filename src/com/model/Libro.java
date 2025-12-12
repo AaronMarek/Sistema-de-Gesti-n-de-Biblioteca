@@ -38,6 +38,7 @@ public class Libro {
 		this.idioma = "Español";
 	}
 
+	// Getters y Setters
 	public int getIdLibro() {
 		return idLibro;
 	}
@@ -158,16 +159,13 @@ public class Libro {
 		this.estado = estado;
 	}
 
+	public boolean estaDisponible() {
+		return cantidadDisponible > 0;
+	}
+
 	@Override
 	public String toString() {
-		return "Libro [idLibro=" + idLibro + ", isbn=" + isbn + ", titulo=" + titulo + ", idAutor=" + idAutor
-				+ ", nombreAutor=" + nombreAutor + ", idCategoria=" + idCategoria + ", nombreCategoria="
-				+ nombreCategoria + ", editorial=" + editorial + ", anioPublicacion=" + anioPublicacion
-				+ ", numeroPaginas=" + numeroPaginas + ", idioma=" + idioma + ", cantidadTotal=" + cantidadTotal
-				+ ", cantidadDisponible=" + cantidadDisponible + ", ubicacion=" + ubicacion + ", estado=" + estado
-				+ "]";
+		return "Libro{" + "titulo='" + titulo + '\'' + ", isbn='" + isbn + '\'' + ", disponibles=" + cantidadDisponible
+				+ "/" + cantidadTotal + '}';
 	}
-	
-	
-
 }
